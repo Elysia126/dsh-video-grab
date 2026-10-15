@@ -1,0 +1,45 @@
+# CI for dsh-video-grab
+#
+# 它做三件事，全部是**不需要 ffmpeg / whisper 模型**也能跑的部分：
+#   1) 语法检查（lib/index.js 与 Electron helper）
+#   2) 端到端**抽帧**（Electron 自带解码器，需要 runner 上有 Electron）
+#   3) 转写引擎的**命令行契约检查**（只查 --help，不跑模型、不下载）
+#
+# 之所以把范围卡在这儿：真跑转写要 500MB 级模型 + ffmpeg，不适合放进 CI。
+# 真正的转写验收是本地手跑的（见 docs/ 里的安装踩坑记录）。
+name: ci
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: 语法检查
+        run: |
+          node --check lib/index.js
+          node --check lib/electron/main.cjs
+
+      - name: 转写引擎命令行契约
+        run: python tools/transcribe.py --help
+
+      - name: 抽帧端到端（用 runner 自带的 Electron）
+        shell: pwsh
+        run: |
+          $rel = Get-ChildItem "$env:LOCALAPPDATA\electron" -Filter electron.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $rel) { Write-Host "::warning::runner 上没有 Electron，抽帧这一步跳过"; exit 0 }
+          $env:DSH_ELECTRON = $rel.FullName
+          # 造一个 1 秒的测试视频（ffmpeg 在 windows-latest 上自带）
+          ffmpeg -y -f lavfi -i testsrc=size=320x240:rate=10 -t 1 -pix_fmt yuv420p test-clip.mp4
+          node test/e2e.mjs probe test-clip.mp4
+          node test/e2e.mjs sheet test-clip.mp4 cells=4 cols=2 w=160

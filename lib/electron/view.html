@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh">
+<head><meta charset="utf-8"><title>dsh-video-grab</title></head>
+<body>
+<video id="v" muted playsinline preload="auto"></video>
+<canvas id="c"></canvas>
+<script>
+  const fs = require('node:fs')
+  const v = document.getElementById('v')
+  const c = document.getElementById('c')
+  const ctx = c.getContext('2d')
+
+  /** 等事件，但带超时 —— 元数据/seek 有可能永远不来，不能无限等。 */
+  function waitEvent(el, ev, ms) {
+    return new Promise((resolve, reject) => {
+      let done = false
+      const finish = (err) => {
+        if (done) return
+        done = true
+        clearTimeout(timer)
+        el.removeEventListener(ev, ok)
+        el.removeEventListener('error', bad)
+        err ? reject(err) : resolve()
+      }
+      const ok = () => finish(null)
+      const bad = () => finish(new Error('媒体事件失败: ' + ev))
+      const timer = setTimeout(() => finish(new Error('超时等待 ' + ev + '（' + ms + 'ms）')), ms)
+      el.addEventListener(ev, ok)
+      el.addEventListener('error', bad)
+      if (ev === 'loadedmetadata' && el.readyState >= 1) finish(null)
+    })
+  }
+
+  /** 打开视频并等元数据；返回时长与尺寸。 */
+  async function open(videoPath) {
+    v.src = 'file:///' + videoPath.replace(/\\/g, '/')
+    await waitEvent(v, 'loadedmetadata', 15000)
+    if (!v.videoWidth || !v.videoHeight) throw new Error('没有可解码的画面（编码可能不被支持）')
+    return { duration: v.duration, width: v.videoWidth, height: v.videoHeight }
+  }
+
+  /** seek 到 t 并确保画面已经换过去。 */
+  async function seek(t) {
+    v.currentTime = t
+    await waitEvent(v, 'seeked', 8000)
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)))
+  }
+
+  /**
+   * 抓帧并拼成一张联系表。
+   * 返回 duration，调用方不必再单独问一次时长（少一次跨进程往返就少一个卡住的机会）。
+   */
+  window.__sheet = async function (videoPath, outFile, count, cols, cellW, fromSec, toSec) {
+    const info = await open(videoPath)
+    const duration = info.duration
+    // 时间窗：只在这一段里采样（用于"盯住某个片段密采"），缺省就是全片
+    const t0 = Math.max(0, Math.min(Number(fromSec) || 0, duration))
+    const t1 = Math.max(t0, Math.min(Number(toSec) || 0, duration)) || duration
+    const span = t1 - t0
+    const cols2 = Math.max(1, Math.min(cols, 8))
+    const cellW2 = Math.max(96, Math.min(cellW, 720))
+    const cellH = Math.round(cellW2 * info.height / info.width)
+    const rows = Math.ceil(count / cols2)
+    c.width = cols2 * cellW2
+    c.height = rows * cellH
+    ctx.fillStyle = '#111'
+    ctx.fillRect(0, 0, c.width, c.height)
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.font = 'bold 20px Consolas, monospace'
+    ctx.textBaseline = 'top'
+
+    const times = []
+    for (let i = 0; i < count; i++) {
+      const t = Math.min(t0 + span * (i + 0.5) / count, Math.max(0, duration - 0.05))
+      times.push(Number(t.toFixed(3)))
+      await seek(t)
+      const x = (i % cols2) * cellW2
+      const y = Math.floor(i / cols2) * cellH
+      ctx.drawImage(v, x, y, cellW2, cellH)
+      ctx.fillStyle = 'rgba(0,0,0,0.65)'
+      ctx.fillRect(x, y, 76, 26)
+      ctx.fillStyle = '#ffd75e'
+      ctx.fillText(t.toFixed(1) + 's', x + 6, y + 3)
+    }
+    // 采样点与时间窗一起落进回执：这样"窗口有没有生效"是读得出来的，不靠猜
+    fs.writeFileSync(outFile + '.times.json', JSON.stringify({ window: [Number(t0.toFixed(2)), Number(t1.toFixed(2))], span: Number(span.toFixed(2)), times }), 'utf8')
+
+    const b64 = c.toDataURL('image/png').split(',')[1]
+    fs.writeFileSync(outFile, Buffer.from(b64, 'base64'))
+    return {
+      ok: true,
+      duration: Number(duration.toFixed(2)),
+      window: [Number(t0.toFixed(2)), Number(t1.toFixed(2))],
+      video: info.width + 'x' + info.height,
+      cells: times.length,
+      cols: cols2,
+      cellW: cellW2,
+      cellH,
+      sheet: c.width + 'x' + c.height,
+      file: outFile,
+      bytes: fs.statSync(outFile).size,
+      times,
+    }
+  }
+
+  /** 均匀抽 N 帧，逐张存 PNG。 */
+  window.__grab = async function (videoPath, outDir, want) {
+    fs.mkdirSync(outDir, { recursive: true })
+    const info = await open(videoPath)
+    const n = Math.max(1, Math.min(want, 48))
+    const saved = []
+    for (let i = 0; i < n; i++) {
+      const t = Math.min(info.duration * (i + 0.5) / n, Math.max(0, info.duration - 0.05))
+      await seek(t)
+      c.width = info.width
+      c.height = info.height
+      ctx.drawImage(v, 0, 0, info.width, info.height)
+      const b64 = c.toDataURL('image/png').split(',')[1]
+      const file = outDir + '\\f' + String(i).padStart(2, '0') + '_' + t.toFixed(2) + 's.png'
+      fs.writeFileSync(file, Buffer.from(b64, 'base64'))
+      saved.push({ index: i, t: Number(t.toFixed(2)), file, bytes: fs.statSync(file).size })
+    }
+    return {
+      ok: true,
+      duration: Number(info.duration.toFixed(2)),
+      video: info.width + 'x' + info.height,
+      count: saved.length,
+      frames: saved,
+    }
+  }
+</script>
+</body>
+</html>

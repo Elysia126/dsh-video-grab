@@ -1,0 +1,6 @@
+# dsh-video-grab bundle patch -- mounts the video inspection host plugin.
+#
+# The id must match the package name: the store contract matches entry ids by it.
+- insert:
+    - id: dsh-video-grab
+      name: 'dsh-video-grab'

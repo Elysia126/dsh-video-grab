@@ -1,0 +1,68 @@
+{
+  "name": "dsh-video-grab",
+  "version": "0.1.1",
+  "private": false,
+  "description": "Video inspection for DSH agents: probe container structure, extract frames, build one contact sheet that shows a whole clip in a single image, and transcribe speech locally. Works without ffmpeg by driving the bundled Electron/Chromium decoder.",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "dsh-plugins",
+    "deepseek-harness",
+    "deepseek-harness-plugin",
+    "cordis",
+    "video",
+    "video-understanding",
+    "contact-sheet",
+    "frames",
+    "transcribe",
+    "whisper",
+    "asr",
+    "bilibili",
+    "ffmpeg",
+    "electron"
+  ],
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OWNER/dsh-video-grab.git"
+  },
+  "homepage": "https://github.com/OWNER/dsh-video-grab#readme",
+  "bugs": {
+    "url": "https://github.com/OWNER/dsh-video-grab/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/",
+    "tools/",
+    "assets/",
+    "docs/",
+    "cordis.patch.yml",
+    "README.md",
+    ".github/"
+  ],
+  "scripts": {
+    "check": "node --check lib/index.js && node --check lib/electron/main.cjs",
+    "test": "node test/e2e.mjs",
+    "selftest": "node test/e2e.mjs probe"
+  },
+  "meta": {
+    "title": "视频抓帧（免 ffmpeg）",
+    "description": "看视频用：探测容器结构、抽帧、把整条片子拼成一张联系表（一次读图看完整条），并可本地转写台词。零 npm 依赖，解码借用本机 Electron 自带的 Chromium/ffmpeg。"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

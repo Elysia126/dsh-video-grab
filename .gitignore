@@ -1,0 +1,25 @@
+# 依赖与构建产物
+node_modules/
+_stage*/
+*.tgz
+
+# 运行期产物（模型、抽帧输出、转写结果都不该进仓库）
+models/
+*.venv/
+.venv/
+out/
+_frames/
+_sheets/
+_surf/
+*.times.json
+_sheet.json
+_sheet.log
+_result.json
+_grid.json
+_grid.log
+
+# 平台与编辑器
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
