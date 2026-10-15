@@ -25,11 +25,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/OWNER/dsh-video-grab.git"
+    "url": "git+https://github.com/Elysia126/dsh-video-grab.git"
   },
-  "homepage": "https://github.com/OWNER/dsh-video-grab#readme",
+  "homepage": "https://github.com/Elysia126/dsh-video-grab#readme",
   "bugs": {
-    "url": "https://github.com/OWNER/dsh-video-grab/issues"
+    "url": "https://github.com/Elysia126/dsh-video-grab/issues"
   },
   "publishConfig": {
     "access": "public",
